@@ -680,34 +680,22 @@ class GenerationHandler:
                         )
 
                         if encoded_image:
-                            # 保存 base64 图片到缓存目录
-                            import uuid
-                            from pathlib import Path
-
-                            filename = f"{uuid.uuid4().hex}.jpg"
-                            cache_dir = Path("tmp")
-                            cache_dir.mkdir(exist_ok=True)
-                            file_path = cache_dir / filename
-
-                            with open(file_path, "wb") as f:
-                                f.write(base64.b64decode(encoded_image))
-
-                            local_url = f"{self._get_base_url()}/tmp/{filename}"
-                            debug_logger.log_info(f"[UPSAMPLE] 图片已放大到 {resolution_name}: {filename}")
+                            debug_logger.log_info(f"[UPSAMPLE] 图片已放大到 {resolution_name}")
 
                             if stream:
                                 yield self._create_stream_chunk(f"✅ 图片已放大到 {resolution_name}\n")
 
-                            # 返回放大后的图片
-                            self._last_generated_url = local_url
+                            # 直接返回 base64 格式
+                            base64_url = f"data:image/jpeg;base64,{encoded_image}"
+                            self._last_generated_url = f"base64_image_{resolution_name}"
                             if stream:
                                 yield self._create_stream_chunk(
-                                    f"![Generated Image]({local_url})",
+                                    f"![Generated Image]({base64_url})",
                                     finish_reason="stop"
                                 )
                             else:
                                 yield self._create_completion_response(
-                                    local_url,
+                                    base64_url,
                                     media_type="image"
                                 )
                             return

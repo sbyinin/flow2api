@@ -337,6 +337,27 @@ class FlowClient:
 
         return "image/jpeg"
 
+    def _convert_to_jpeg(self, image_bytes: bytes) -> bytes:
+        """将图片转换为 JPEG 格式
+
+        Args:
+            image_bytes: 原始图片字节数据
+
+        Returns:
+            JPEG 格式的图片字节数据
+        """
+        from io import BytesIO
+        from PIL import Image
+
+        img = Image.open(BytesIO(image_bytes))
+        # 如果有透明通道，转换为 RGB
+        if img.mode in ('RGBA', 'LA', 'P'):
+            img = img.convert('RGB')
+        
+        output = BytesIO()
+        img.save(output, format='JPEG', quality=95)
+        return output.getvalue()
+
     async def upload_image(
         self,
         at: str,
