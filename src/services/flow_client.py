@@ -304,6 +304,39 @@ class FlowClient:
 
     # ========== 图片上传 (使用AT) ==========
 
+    def _detect_image_mime_type(self, image_bytes: bytes) -> str:
+        """通过文件头 magic bytes 检测图片 MIME 类型
+
+        Args:
+            image_bytes: 图片字节数据
+
+        Returns:
+            MIME 类型字符串，默认 image/jpeg
+        """
+        if len(image_bytes) < 12:
+            return "image/jpeg"
+
+        # WebP: RIFF....WEBP
+        if image_bytes[:4] == b'RIFF' and image_bytes[8:12] == b'WEBP':
+            return "image/webp"
+        # PNG: 89 50 4E 47
+        if image_bytes[:4] == b'\x89PNG':
+            return "image/png"
+        # JPEG: FF D8 FF
+        if image_bytes[:3] == b'\xff\xd8\xff':
+            return "image/jpeg"
+        # GIF: GIF87a 或 GIF89a
+        if image_bytes[:6] in (b'GIF87a', b'GIF89a'):
+            return "image/gif"
+        # BMP: BM
+        if image_bytes[:2] == b'BM':
+            return "image/bmp"
+        # JPEG 2000: 00 00 00 0C 6A 50
+        if image_bytes[:6] == b'\x00\x00\x00\x0cjP':
+            return "image/jp2"
+
+        return "image/jpeg"
+
     async def upload_image(
         self,
         at: str,
@@ -326,6 +359,9 @@ class FlowClient:
         if aspect_ratio.startswith("VIDEO_"):
             aspect_ratio = aspect_ratio.replace("VIDEO_", "IMAGE_")
 
+        # 自动检测图片 MIME 类型
+        mime_type = self._detect_image_mime_type(image_bytes)
+
         # 编码为base64 (去掉前缀)
         image_base64 = base64.b64encode(image_bytes).decode('utf-8')
 
@@ -333,7 +369,7 @@ class FlowClient:
         json_data = {
             "imageInput": {
                 "rawImageBytes": image_base64,
-                "mimeType": "image/jpeg",
+                "mimeType": mime_type,
                 "isUserUploaded": True,
                 "aspectRatio": aspect_ratio
             },
