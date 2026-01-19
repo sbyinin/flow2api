@@ -1028,10 +1028,14 @@ async def plugin_update_token(request: dict, authorization: Optional[str] = Head
     if existing_token:
         # Update existing token
         try:
-            # Log for debugging
+            # Log for debugging - 显示前10和后10字符便于区分
+            old_st_preview = f"{existing_token.st[:10]}...{existing_token.st[-10:]}" if existing_token.st and len(existing_token.st) > 20 else (existing_token.st or 'None')
+            new_st_preview = f"{session_token[:10]}...{session_token[-10:]}" if len(session_token) > 20 else session_token
+            
             print(f"[PLUGIN_UPDATE] Updating token for {email}")
-            print(f"[PLUGIN_UPDATE] Old ST: {existing_token.st[:20] if existing_token.st else 'None'}...")
-            print(f"[PLUGIN_UPDATE] New ST: {session_token[:20]}...")
+            print(f"[PLUGIN_UPDATE] Old ST: {old_st_preview}")
+            print(f"[PLUGIN_UPDATE] New ST: {new_st_preview}")
+            print(f"[PLUGIN_UPDATE] ST changed: {existing_token.st != session_token}")
             print(f"[PLUGIN_UPDATE] New AT expires: {at_expires}")
             
             # Update token
@@ -1044,7 +1048,8 @@ async def plugin_update_token(request: dict, authorization: Optional[str] = Head
             
             # Verify update
             updated_token = await db.get_token(existing_token.id)
-            print(f"[PLUGIN_UPDATE] After update ST: {updated_token.st[:20] if updated_token.st else 'None'}...")
+            updated_st_preview = f"{updated_token.st[:10]}...{updated_token.st[-10:]}" if updated_token.st and len(updated_token.st) > 20 else (updated_token.st or 'None')
+            print(f"[PLUGIN_UPDATE] After update ST: {updated_st_preview}")
 
             # Check if auto-enable is enabled and token is disabled
             if plugin_config.auto_enable_on_update and not existing_token.is_active:
