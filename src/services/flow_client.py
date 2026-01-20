@@ -474,42 +474,60 @@ class FlowClient:
         """
         url = f"{self.api_base_url}/projects/{project_id}/flowMedia:batchGenerateImages"
 
-        # 获取 reCAPTCHA token
-        recaptcha_token = await self._get_recaptcha_token(project_id) or ""
-        session_id = self._generate_session_id()
+        # 403重试逻辑 - 最多重试3次
+        max_retries = 3
+        last_error = None
+        
+        for retry_attempt in range(max_retries):
+            # 每次重试都重新获取 reCAPTCHA token
+            recaptcha_token = await self._get_recaptcha_token(project_id) or ""
+            session_id = self._generate_session_id()
 
-        # 构建请求
-        request_data = {
-            "clientContext": {
-                "recaptchaToken": recaptcha_token,
-                "projectId": project_id,
-                "sessionId": session_id,
-                "tool": "PINHOLE"
-            },
-            "seed": random.randint(1, 99999),
-            "imageModelName": model_name,
-            "imageAspectRatio": aspect_ratio,
-            "prompt": prompt,
-            "imageInputs": image_inputs or []
-        }
+            # 构建请求
+            request_data = {
+                "clientContext": {
+                    "recaptchaToken": recaptcha_token,
+                    "projectId": project_id,
+                    "sessionId": session_id,
+                    "tool": "PINHOLE"
+                },
+                "seed": random.randint(1, 99999),
+                "imageModelName": model_name,
+                "imageAspectRatio": aspect_ratio,
+                "prompt": prompt,
+                "imageInputs": image_inputs or []
+            }
 
-        json_data = {
-            "clientContext": {
-                "recaptchaToken": recaptcha_token,
-                "sessionId": session_id
-            },
-            "requests": [request_data]
-        }
+            json_data = {
+                "clientContext": {
+                    "recaptchaToken": recaptcha_token,
+                    "sessionId": session_id
+                },
+                "requests": [request_data]
+            }
 
-        result = await self._make_request(
-            method="POST",
-            url=url,
-            json_data=json_data,
-            use_at=True,
-            at_token=at
-        )
-
-        return result
+            try:
+                result = await self._make_request(
+                    method="POST",
+                    url=url,
+                    json_data=json_data,
+                    use_at=True,
+                    at_token=at
+                )
+                return result
+            except Exception as e:
+                error_str = str(e)
+                last_error = e
+                # 检查是否是403错误，需要重试
+                if "403" in error_str and retry_attempt < max_retries - 1:
+                    debug_logger.log_warning(f"[IMAGE] 生成遇到403错误，正在重新获取验证码重试 ({retry_attempt + 2}/{max_retries})...")
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    raise e
+        
+        # 所有重试都失败
+        raise last_error
 
     async def upsample_image(
         self,
@@ -590,41 +608,59 @@ class FlowClient:
         """
         url = f"{self.api_base_url}/video:batchAsyncGenerateVideoText"
 
-        # 获取 reCAPTCHA token
-        recaptcha_token = await self._get_recaptcha_token(project_id) or ""
-        session_id = self._generate_session_id()
-        scene_id = str(uuid.uuid4())
+        # 403重试逻辑 - 最多重试3次
+        max_retries = 3
+        last_error = None
+        
+        for retry_attempt in range(max_retries):
+            # 每次重试都重新获取 reCAPTCHA token
+            recaptcha_token = await self._get_recaptcha_token(project_id) or ""
+            session_id = self._generate_session_id()
+            scene_id = str(uuid.uuid4())
 
-        json_data = {
-            "clientContext": {
-                "recaptchaToken": recaptcha_token,
-                "sessionId": session_id,
-                "projectId": project_id,
-                "tool": "PINHOLE",
-                "userPaygateTier": user_paygate_tier
-            },
-            "requests": [{
-                "aspectRatio": aspect_ratio,
-                "seed": random.randint(1, 99999),
-                "textInput": {
-                    "prompt": prompt
+            json_data = {
+                "clientContext": {
+                    "recaptchaToken": recaptcha_token,
+                    "sessionId": session_id,
+                    "projectId": project_id,
+                    "tool": "PINHOLE",
+                    "userPaygateTier": user_paygate_tier
                 },
-                "videoModelKey": model_key,
-                "metadata": {
-                    "sceneId": scene_id
-                }
-            }]
-        }
+                "requests": [{
+                    "aspectRatio": aspect_ratio,
+                    "seed": random.randint(1, 99999),
+                    "textInput": {
+                        "prompt": prompt
+                    },
+                    "videoModelKey": model_key,
+                    "metadata": {
+                        "sceneId": scene_id
+                    }
+                }]
+            }
 
-        result = await self._make_request(
-            method="POST",
-            url=url,
-            json_data=json_data,
-            use_at=True,
-            at_token=at
-        )
-
-        return result
+            try:
+                result = await self._make_request(
+                    method="POST",
+                    url=url,
+                    json_data=json_data,
+                    use_at=True,
+                    at_token=at
+                )
+                return result
+            except Exception as e:
+                error_str = str(e)
+                last_error = e
+                # 检查是否是403错误，需要重试
+                if "403" in error_str and retry_attempt < max_retries - 1:
+                    debug_logger.log_warning(f"[VIDEO T2V] 生成遇到403错误，正在重新获取验证码重试 ({retry_attempt + 2}/{max_retries})...")
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    raise e
+        
+        # 所有重试都失败
+        raise last_error
 
     async def generate_video_reference_images(
         self,
@@ -652,42 +688,60 @@ class FlowClient:
         """
         url = f"{self.api_base_url}/video:batchAsyncGenerateVideoReferenceImages"
 
-        # 获取 reCAPTCHA token
-        recaptcha_token = await self._get_recaptcha_token(project_id) or ""
-        session_id = self._generate_session_id()
-        scene_id = str(uuid.uuid4())
+        # 403重试逻辑 - 最多重试3次
+        max_retries = 3
+        last_error = None
+        
+        for retry_attempt in range(max_retries):
+            # 每次重试都重新获取 reCAPTCHA token
+            recaptcha_token = await self._get_recaptcha_token(project_id) or ""
+            session_id = self._generate_session_id()
+            scene_id = str(uuid.uuid4())
 
-        json_data = {
-            "clientContext": {
-                "recaptchaToken": recaptcha_token,
-                "sessionId": session_id,
-                "projectId": project_id,
-                "tool": "PINHOLE",
-                "userPaygateTier": user_paygate_tier
-            },
-            "requests": [{
-                "aspectRatio": aspect_ratio,
-                "seed": random.randint(1, 99999),
-                "textInput": {
-                    "prompt": prompt
+            json_data = {
+                "clientContext": {
+                    "recaptchaToken": recaptcha_token,
+                    "sessionId": session_id,
+                    "projectId": project_id,
+                    "tool": "PINHOLE",
+                    "userPaygateTier": user_paygate_tier
                 },
-                "videoModelKey": model_key,
-                "referenceImages": reference_images,
-                "metadata": {
-                    "sceneId": scene_id
-                }
-            }]
-        }
+                "requests": [{
+                    "aspectRatio": aspect_ratio,
+                    "seed": random.randint(1, 99999),
+                    "textInput": {
+                        "prompt": prompt
+                    },
+                    "videoModelKey": model_key,
+                    "referenceImages": reference_images,
+                    "metadata": {
+                        "sceneId": scene_id
+                    }
+                }]
+            }
 
-        result = await self._make_request(
-            method="POST",
-            url=url,
-            json_data=json_data,
-            use_at=True,
-            at_token=at
-        )
-
-        return result
+            try:
+                result = await self._make_request(
+                    method="POST",
+                    url=url,
+                    json_data=json_data,
+                    use_at=True,
+                    at_token=at
+                )
+                return result
+            except Exception as e:
+                error_str = str(e)
+                last_error = e
+                # 检查是否是403错误，需要重试
+                if "403" in error_str and retry_attempt < max_retries - 1:
+                    debug_logger.log_warning(f"[VIDEO R2V] 生成遇到403错误，正在重新获取验证码重试 ({retry_attempt + 2}/{max_retries})...")
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    raise e
+        
+        # 所有重试都失败
+        raise last_error
 
     async def generate_video_start_end(
         self,
@@ -717,47 +771,65 @@ class FlowClient:
         """
         url = f"{self.api_base_url}/video:batchAsyncGenerateVideoStartAndEndImage"
 
-        # 获取 reCAPTCHA token
-        recaptcha_token = await self._get_recaptcha_token(project_id) or ""
-        session_id = self._generate_session_id()
-        scene_id = str(uuid.uuid4())
+        # 403重试逻辑 - 最多重试3次
+        max_retries = 3
+        last_error = None
+        
+        for retry_attempt in range(max_retries):
+            # 每次重试都重新获取 reCAPTCHA token
+            recaptcha_token = await self._get_recaptcha_token(project_id) or ""
+            session_id = self._generate_session_id()
+            scene_id = str(uuid.uuid4())
 
-        json_data = {
-            "clientContext": {
-                "recaptchaToken": recaptcha_token,
-                "sessionId": session_id,
-                "projectId": project_id,
-                "tool": "PINHOLE",
-                "userPaygateTier": user_paygate_tier
-            },
-            "requests": [{
-                "aspectRatio": aspect_ratio,
-                "seed": random.randint(1, 99999),
-                "textInput": {
-                    "prompt": prompt
+            json_data = {
+                "clientContext": {
+                    "recaptchaToken": recaptcha_token,
+                    "sessionId": session_id,
+                    "projectId": project_id,
+                    "tool": "PINHOLE",
+                    "userPaygateTier": user_paygate_tier
                 },
-                "videoModelKey": model_key,
-                "startImage": {
-                    "mediaId": start_media_id
-                },
-                "endImage": {
-                    "mediaId": end_media_id
-                },
-                "metadata": {
-                    "sceneId": scene_id
-                }
-            }]
-        }
+                "requests": [{
+                    "aspectRatio": aspect_ratio,
+                    "seed": random.randint(1, 99999),
+                    "textInput": {
+                        "prompt": prompt
+                    },
+                    "videoModelKey": model_key,
+                    "startImage": {
+                        "mediaId": start_media_id
+                    },
+                    "endImage": {
+                        "mediaId": end_media_id
+                    },
+                    "metadata": {
+                        "sceneId": scene_id
+                    }
+                }]
+            }
 
-        result = await self._make_request(
-            method="POST",
-            url=url,
-            json_data=json_data,
-            use_at=True,
-            at_token=at
-        )
-
-        return result
+            try:
+                result = await self._make_request(
+                    method="POST",
+                    url=url,
+                    json_data=json_data,
+                    use_at=True,
+                    at_token=at
+                )
+                return result
+            except Exception as e:
+                error_str = str(e)
+                last_error = e
+                # 检查是否是403错误，需要重试
+                if "403" in error_str and retry_attempt < max_retries - 1:
+                    debug_logger.log_warning(f"[VIDEO I2V] 首尾帧生成遇到403错误，正在重新获取验证码重试 ({retry_attempt + 2}/{max_retries})...")
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    raise e
+        
+        # 所有重试都失败
+        raise last_error
 
     async def generate_video_start_image(
         self,
@@ -785,45 +857,63 @@ class FlowClient:
         """
         url = f"{self.api_base_url}/video:batchAsyncGenerateVideoStartImage"
 
-        # 获取 reCAPTCHA token
-        recaptcha_token = await self._get_recaptcha_token(project_id) or ""
-        session_id = self._generate_session_id()
-        scene_id = str(uuid.uuid4())
+        # 403重试逻辑 - 最多重试3次
+        max_retries = 3
+        last_error = None
+        
+        for retry_attempt in range(max_retries):
+            # 每次重试都重新获取 reCAPTCHA token
+            recaptcha_token = await self._get_recaptcha_token(project_id) or ""
+            session_id = self._generate_session_id()
+            scene_id = str(uuid.uuid4())
 
-        json_data = {
-            "clientContext": {
-                "recaptchaToken": recaptcha_token,
-                "sessionId": session_id,
-                "projectId": project_id,
-                "tool": "PINHOLE",
-                "userPaygateTier": user_paygate_tier
-            },
-            "requests": [{
-                "aspectRatio": aspect_ratio,
-                "seed": random.randint(1, 99999),
-                "textInput": {
-                    "prompt": prompt
+            json_data = {
+                "clientContext": {
+                    "recaptchaToken": recaptcha_token,
+                    "sessionId": session_id,
+                    "projectId": project_id,
+                    "tool": "PINHOLE",
+                    "userPaygateTier": user_paygate_tier
                 },
-                "videoModelKey": model_key,
-                "startImage": {
-                    "mediaId": start_media_id
-                },
-                # 注意: 没有endImage字段,只用首帧
-                "metadata": {
-                    "sceneId": scene_id
-                }
-            }]
-        }
+                "requests": [{
+                    "aspectRatio": aspect_ratio,
+                    "seed": random.randint(1, 99999),
+                    "textInput": {
+                        "prompt": prompt
+                    },
+                    "videoModelKey": model_key,
+                    "startImage": {
+                        "mediaId": start_media_id
+                    },
+                    # 注意: 没有endImage字段,只用首帧
+                    "metadata": {
+                        "sceneId": scene_id
+                    }
+                }]
+            }
 
-        result = await self._make_request(
-            method="POST",
-            url=url,
-            json_data=json_data,
-            use_at=True,
-            at_token=at
-        )
-
-        return result
+            try:
+                result = await self._make_request(
+                    method="POST",
+                    url=url,
+                    json_data=json_data,
+                    use_at=True,
+                    at_token=at
+                )
+                return result
+            except Exception as e:
+                error_str = str(e)
+                last_error = e
+                # 检查是否是403错误，需要重试
+                if "403" in error_str and retry_attempt < max_retries - 1:
+                    debug_logger.log_warning(f"[VIDEO I2V] 首帧生成遇到403错误，正在重新获取验证码重试 ({retry_attempt + 2}/{max_retries})...")
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    raise e
+        
+        # 所有重试都失败
+        raise last_error
 
     # ========== 任务轮询 (使用AT) ==========
 
