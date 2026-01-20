@@ -1,4 +1,5 @@
 """Flow API Client for VideoFX (Veo)"""
+import asyncio
 import time
 import uuid
 import random
@@ -935,14 +936,31 @@ class FlowClient:
 
                         debug_logger.log_info(f"[reCAPTCHA] polling #{i+1}: {result_json}")
 
-                        solution = result_json.get('solution', {})
-                        response = solution.get('gRecaptchaResponse')
+                        # 检查任务状态
+                        status = result_json.get('status')
+                        
+                        # 任务完成，获取 token
+                        if status == 'ready':
+                            solution = result_json.get('solution', {})
+                            response = solution.get('gRecaptchaResponse')
+                            if response:
+                                debug_logger.log_info(f"[reCAPTCHA] ✅ token 获取成功")
+                                return response
+                            else:
+                                debug_logger.log_error(f"[reCAPTCHA] ❌ 任务完成但无 token")
+                                return None
+                        
+                        # 任务失败
+                        elif status == 'failed':
+                            error_code = result_json.get('errorCode', 'unknown')
+                            error_desc = result_json.get('errorDescription', '')
+                            debug_logger.log_error(f"[reCAPTCHA] ❌ 任务失败: {error_code} - {error_desc}")
+                            return None
+                        
+                        # 任务处理中，继续等待（使用异步 sleep）
+                        await asyncio.sleep(3)
 
-                        if response:
-                            return response
-
-                        time.sleep(3)
-
+                    debug_logger.log_error(f"[reCAPTCHA] ❌ 轮询超时，未获取到 token")
                     return None
 
             except Exception as e:
