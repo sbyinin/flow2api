@@ -186,19 +186,45 @@ class FlowClient:
                         duration_ms=duration_ms
                     )
 
-                response.raise_for_status()
+                # 检查HTTP错误
+                if response.status_code >= 400:
+                    # 解析错误响应
+                    error_reason = f"HTTP Error {response.status_code}"
+                    try:
+                        error_body = response.json()
+                        # 提取 Google API 错误格式中的 reason
+                        if "error" in error_body:
+                            error_info = error_body["error"]
+                            error_message = error_info.get("message", "")
+                            # 从 details 中提取 reason
+                            details = error_info.get("details", [])
+                            for detail in details:
+                                if detail.get("reason"):
+                                    error_reason = detail.get("reason")
+                                    break
+                            if error_message:
+                                error_reason = f"{error_reason}: {error_message}"
+                    except:
+                        error_reason = f"HTTP Error {response.status_code}: {response.text[:200]}"
+                    
+                    # 失败时输出请求体和错误内容到控制台
+                    debug_logger.log_error(f"[API FAILED] URL: {url}")
+                    debug_logger.log_error(f"[API FAILED] Request Body: {json_data}")
+                    debug_logger.log_error(f"[API FAILED] Response: {response.text}")
+                    
+                    raise Exception(error_reason)
+
                 return response.json()
 
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
             error_msg = str(e)
 
-            if config.debug_enabled:
-                debug_logger.log_error(
-                    error_message=error_msg,
-                    status_code=getattr(e, 'status_code', None),
-                    response_text=getattr(e, 'response_text', None)
-                )
+            # 如果不是我们自己抛出的异常，记录日志
+            if "HTTP Error" not in error_msg and not any(x in error_msg for x in ["PUBLIC_ERROR", "INVALID_ARGUMENT"]):
+                debug_logger.log_error(f"[API FAILED] URL: {url}")
+                debug_logger.log_error(f"[API FAILED] Request Body: {json_data}")
+                debug_logger.log_error(f"[API FAILED] Exception: {error_msg}")
 
             raise Exception(f"Flow API request failed: {error_msg}")
 
