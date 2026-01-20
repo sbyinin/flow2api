@@ -103,7 +103,8 @@ class FlowClient:
         use_st: bool = False,
         st_token: Optional[str] = None,
         use_at: bool = False,
-        at_token: Optional[str] = None
+        at_token: Optional[str] = None,
+        timeout: Optional[int] = None
     ) -> Dict[str, Any]:
         """统一HTTP请求处理
 
@@ -116,8 +117,10 @@ class FlowClient:
             st_token: Session Token
             use_at: 是否使用AT认证 (Bearer方式)
             at_token: Access Token
+            timeout: 自定义超时时间(秒)，不传则使用默认值
         """
         proxy_url = await self.proxy_manager.get_proxy_url()
+        request_timeout = timeout or self.timeout
 
         if headers is None:
             headers = {}
@@ -162,7 +165,7 @@ class FlowClient:
                         url,
                         headers=headers,
                         proxy=proxy_url,
-                        timeout=self.timeout,
+                        timeout=request_timeout,
                         impersonate="chrome110"
                     )
                 else:  # POST
@@ -171,7 +174,7 @@ class FlowClient:
                         headers=headers,
                         json=json_data,
                         proxy=proxy_url,
-                        timeout=self.timeout,
+                        timeout=request_timeout,
                         impersonate="chrome110"
                     )
 
@@ -564,12 +567,14 @@ class FlowClient:
             }
         }
 
+        # 4K/2K 放大使用专用超时，因为返回的 base64 数据量很大
         result = await self._make_request(
             method="POST",
             url=url,
             json_data=json_data,
             use_at=True,
-            at_token=at
+            at_token=at,
+            timeout=config.upsample_timeout
         )
 
         # 返回 base64 编码的图片
